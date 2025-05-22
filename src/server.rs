@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -111,9 +111,7 @@ fn handle_client(
                 break;
             }
             Ok(size) => {
-                let msg = String::from_utf8_lossy(&buf[..size]);
-                tracing::info!("Received from {}: {}", addr, msg);
-                broadcast(&msg, &clients, Some(&addr))?;
+                broadcast(&buf[..size], &clients, Some(&addr))?;
             }
             Err(e) => {
                 // Remove client from the map
@@ -126,17 +124,23 @@ fn handle_client(
     Ok(())
 }
 
+#[tracing::instrument(skip_all, fields(payload_size = payload.len(), sender = ?_sender), err(Debug))]
 fn broadcast(
-    msg: &str,
+    payload: &[u8],
     clients: &Arc<Mutex<HashMap<SocketAddr, TcpStream>>>,
     _sender: Option<&SocketAddr>,
 ) -> Result<()> {
     let clients = clients.lock().unwrap();
+    tracing::debug!(clients = ?clients, client_count = clients.len(), "Broadcasting payload");
     for (addr, client) in clients.iter() {
+        let span = tracing::debug_span!("write_to_client", addr = %addr);
+        let _enter = span.enter();
+        tracing::debug!("write");
+
         client
             .try_clone()
             .context(format!("Failed to clone client stream for {}", addr))?
-            .write_all(msg.as_bytes())
+            .write_all(payload)
             .context(format!("Error broadcasting to {}", addr))?;
     }
     Ok(())

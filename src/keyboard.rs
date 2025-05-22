@@ -1,32 +1,25 @@
 use anyhow::{Context, Result};
 use evdev::{Device, KeyCode};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 
-use crate::config::KeySyncConfig;
-
-// Event structure to send to the server
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct KeyEvent {
-    pub key: String,
-    pub client_id: String,
-}
+use crate::config::{KeyCodeMap, KeySyncConfig};
+use crate::protocol::KeyEvent;
 
 pub struct KeyboardMonitor {
-    sender: mpsc::Sender<KeyEvent>,
     config: KeySyncConfig,
+    sender: mpsc::Sender<KeyEvent>,
     client_id: String,
 }
 
 impl KeyboardMonitor {
     pub fn new(sender: mpsc::Sender<KeyEvent>, config: KeySyncConfig, client_id: String) -> Self {
         KeyboardMonitor {
-            sender,
             config,
+            sender,
             client_id,
         }
     }
@@ -136,8 +129,8 @@ impl KeyboardMonitor {
     }
 
     fn process_key_event(
+        outgoing_map: &KeyCodeMap,
         event: evdev::InputEvent,
-        config: &KeySyncConfig,
         sender: &mpsc::Sender<KeyEvent>,
         client_id: &str,
     ) {
@@ -146,18 +139,17 @@ impl KeyboardMonitor {
         }
 
         let key = evdev::KeyCode::new(event.code());
-        let key_name = format!("{:?}", key);
 
-        let mapped_key = match config.outgoing.get(&key_name) {
+        let mapped_key = match outgoing_map.get(&key) {
             Some(mapped_key) => {
-                tracing::info!(original = %key_name, mapped = %mapped_key, "Key pressed and mapped");
-                mapped_key
+                tracing::info!(original = ?key, mapped = ?mapped_key, "Key pressed and mapped");
+                *mapped_key
             }
             None => return,
         };
 
         let key_event = KeyEvent {
-            key: mapped_key.clone(),
+            key: mapped_key.0,
             client_id: client_id.to_string(),
         };
 
@@ -167,8 +159,8 @@ impl KeyboardMonitor {
     }
 
     fn monitor_keyboard(
+        outgoing_map: &KeyCodeMap,
         device: &mut Device,
-        config: &KeySyncConfig,
         sender: &mpsc::Sender<KeyEvent>,
         client_id: String,
     ) -> Result<()> {
@@ -179,7 +171,7 @@ impl KeyboardMonitor {
                 .fetch_events()
                 .context("Failed to fetch events from keyboard device")?
             {
-                Self::process_key_event(event, config, sender, &client_id);
+                Self::process_key_event(outgoing_map, event, sender, &client_id);
             }
 
             std::thread::sleep(std::time::Duration::from_millis(5));
@@ -203,7 +195,7 @@ impl KeyboardMonitor {
 
         for (i, mut keyboard) in keyboards.into_iter().enumerate() {
             let sender = self.sender.clone();
-            let config = self.config.clone();
+            let outgoing_map = self.config.outgoing.clone();
             let client_id = self.client_id.clone();
 
             let handle = thread::spawn(move || -> Result<()> {
@@ -213,7 +205,7 @@ impl KeyboardMonitor {
                     "Started monitoring keyboard"
                 );
 
-                Self::monitor_keyboard(&mut keyboard, &config, &sender, client_id)
+                Self::monitor_keyboard(&outgoing_map, &mut keyboard, &sender, client_id)
             });
 
             handles.push((i, handle));

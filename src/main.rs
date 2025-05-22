@@ -5,6 +5,7 @@ use std::process;
 mod client;
 mod config;
 mod keyboard;
+mod protocol;
 mod reconnectable_stream;
 mod server;
 mod utils;
@@ -52,19 +53,17 @@ fn run() -> Result<()> {
 }
 
 fn main() {
-    // If rust log is not setup, set our default logging just for our library.
-    if std::env::var_os("RUST_LOG").is_none() {
-        std::env::set_var("RUST_LOG", format!("{}=debug", env!("CARGO_CRATE_NAME")));
-    }
-
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                // If RUST_LOG isn't set, set a default level.
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
         .with_target(false)
         .init();
 
     if let Err(e) = run() {
         tracing::error!("Application error: {}", e);
-        // Print cause chain for better diagnostics
         let mut source = e.source();
         while let Some(cause) = source {
             tracing::error!("Caused by: {}", cause);
