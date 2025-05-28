@@ -97,7 +97,7 @@ impl KeyboardMonitor {
     }
 
     fn log_keyboard_device(device: &Device, path: &Path) {
-        tracing::info!(path = ?path, name = device.name(), physical = device.physical_path(), "Found keyboard device");
+        tracing::debug!(path = ?path, name = device.name(), physical = device.physical_path(), "Found keyboard device");
     }
 
     fn is_keyboard_device(device: &Device) -> bool {
@@ -164,8 +164,6 @@ impl KeyboardMonitor {
         sender: &mpsc::Sender<KeyEvent>,
         client_id: String,
     ) -> Result<()> {
-        tracing::info!(name = device.name(), "Monitoring keyboard");
-
         loop {
             for event in device
                 .fetch_events()
@@ -200,9 +198,9 @@ impl KeyboardMonitor {
 
             let handle = thread::spawn(move || -> Result<()> {
                 tracing::info!(
-                    index = i,
                     name = keyboard.name(),
-                    "Started monitoring keyboard"
+                    physical = keyboard.physical_path(),
+                    "Monitoring keyboard"
                 );
 
                 Self::monitor_keyboard(&outgoing_map, &mut keyboard, &sender, client_id)
