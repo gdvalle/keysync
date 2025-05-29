@@ -6,8 +6,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 const INITIAL_BACKOFF_MS: u64 = 50;
-const MAX_BACKOFF_MS: u64 = 10_000; // 10 seconds max backoff
-const CONNECTION_TIMEOUT_SECS: u64 = 5; // 5 second connection timeout
+const MAX_BACKOFF_MS: u64 = 10_000;
+const CONNECTION_TIMEOUT_SECS: u64 = 5;
 
 pub struct ReconnectableTcpStream {
     stream: Option<TcpStream>,
@@ -62,7 +62,7 @@ impl ReconnectableTcpStream {
             tracing::warn!(
                 attempt = attempt,
                 backoff_ms = self.current_backoff.as_millis(),
-                "Connection lost. Reconnecting"
+                "Connection lost; reconnecting"
             );
 
             thread::sleep(self.current_backoff);
@@ -110,7 +110,7 @@ impl Read for ReconnectableTcpStream {
                         Ok(n) => return Ok(n),
                         Err(e) => {
                             // Any error triggers reconnection
-                            tracing::warn!("Read error: {}, attempting reconnect", e);
+                            tracing::warn!(error = ?e, "Read error, attempting reconnect");
                             self.stream = None;
                             self.reconnect()?;
                             continue;
@@ -135,7 +135,7 @@ impl Write for ReconnectableTcpStream {
                         Ok(n) => return Ok(n),
                         Err(e) => {
                             // Any error triggers reconnection
-                            tracing::warn!("Write error: {}, attempting reconnect", e);
+                            tracing::warn!(error = ?e, "Write error, attempting reconnect");
                             self.stream = None;
                             self.reconnect()?;
                             continue;

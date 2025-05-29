@@ -24,8 +24,8 @@ impl KeyboardMonitor {
         }
     }
 
-    pub fn find_keyboards(&self) -> Result<Vec<Device>> {
-        let selectors = if let Some(devices) = self.config.devices.as_ref() {
+    fn build_device_selectors(&self) -> Result<Vec<DeviceSelector>> {
+        if let Some(devices) = self.config.devices.as_ref() {
             let mut selectors = Vec::new();
             for entry in devices {
                 if entry.starts_with('/') {
@@ -37,10 +37,14 @@ impl KeyboardMonitor {
                     selectors.push(DeviceSelector::Regex(re));
                 }
             }
-            selectors
+            Ok(selectors)
         } else {
-            Vec::new()
-        };
+            Ok(Vec::new())
+        }
+    }
+
+    pub fn find_keyboards(&self) -> Result<Vec<Device>> {
+        let selectors = self.build_device_selectors()?;
 
         let mut devices = Vec::new();
         let input_path = Path::new("/dev/input");

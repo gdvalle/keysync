@@ -63,12 +63,7 @@ fn main() {
         .init();
 
     if let Err(e) = run() {
-        tracing::error!("Application error: {}", e);
-        let mut source = e.source();
-        while let Some(cause) = source {
-            tracing::error!("Caused by: {}", cause);
-            source = cause.source();
-        }
+        tracing::error!(cause = e.source(), "Application error: {}", e);
         process::exit(1);
     }
 }
